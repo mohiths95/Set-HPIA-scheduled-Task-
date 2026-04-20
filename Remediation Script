@@ -1,0 +1,67 @@
+# -------------------------------
+# Ensure Task Scheduler folder exists
+# -------------------------------
+$service = New-Object -ComObject "Schedule.Service"
+$service.Connect()
+
+$root = $service.GetFolder("\")
+
+try {
+    $null = $root.GetFolder("HPIA")
+} catch {
+    $root.CreateFolder("HPIA") | Out-Null
+}
+
+# -------------------------------
+# Clean old task (if exists)
+# -------------------------------
+Unregister-ScheduledTask -TaskName "\HPIA\RunHPIA" -Confirm:$false -ErrorAction SilentlyContinue
+
+# -------------------------------
+# Action (your working command)
+# -------------------------------
+$Action = New-ScheduledTaskAction `
+-Execute "powershell.exe" `
+-Argument '-ExecutionPolicy Bypass -Command "& ''C:\HPIA\HPImageAssistant.exe'' /Operation:Analyze /Category:All /Selection:Critical /silent /noreboot /Action:Install /ReportFolder:C:\HPIAReport /Softpaqdownloadfolder:C:\HPIASoftpaqs"' `
+-WorkingDirectory "C:\HPIA"
+
+# -------------------------------
+# Trigger (Every Monday 12 PM)
+# -------------------------------
+$Trigger = New-ScheduledTaskTrigger `
+-Weekly `
+-DaysOfWeek Monday `
+-At 12:00
+
+# -------------------------------
+# Principal (SYSTEM)
+# -------------------------------
+$Principal = New-ScheduledTaskPrincipal `
+-UserId "SYSTEM" `
+-RunLevel Highest
+
+# -------------------------------
+# Settings (missed run handling included)
+# -------------------------------
+$Settings = New-ScheduledTaskSettingsSet `
+-StartWhenAvailable `
+-AllowStartIfOnBatteries `
+-DontStopIfGoingOnBatteries `
+-MultipleInstances IgnoreNew
+
+# -------------------------------
+# Create Task
+# -------------------------------
+$Task = New-ScheduledTask `
+-Action $Action `
+-Trigger $Trigger `
+-Principal $Principal `
+-Settings $Settings
+
+# -------------------------------
+# Register Task in HPIA folder
+# -------------------------------
+Register-ScheduledTask `
+-TaskName "\HPIA\RunHPIA" `
+-InputObject $Task `
+-Force
