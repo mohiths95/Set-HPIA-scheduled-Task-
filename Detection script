@@ -1,0 +1,12 @@
+$TaskPath = "\HPIA\"
+$TaskName = "RunHPIA"
+
+try {
+    Get-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -ErrorAction Stop | Out-Null
+    Write-Output "Compliant"
+    exit 0
+}
+catch {
+    Write-Output "Task not found"
+    exit 1
+}
