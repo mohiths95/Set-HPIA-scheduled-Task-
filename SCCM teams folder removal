@@ -1,0 +1,67 @@
+# PowerShell script to remove all Spotify-related WindowsApps packages and folders
+
+$BasePath   = "C:\Program Files\WindowsApps"
+$Prefix     = "*teams*"
+
+# Step 1: Try to uninstall via AppxPackage for all users
+Write-Output "Searching for Microsoft Teams AppxPackages..."
+$pkgs = Get-AppxPackage -AllUsers | Where-Object { $_.Name -like "*teams*" }
+
+if ($pkgs.Count -gt 0) {
+    foreach ($pkg in $pkgs) {
+        Write-Output "Attempting to remove AppxPackage: $($pkg.PackageFullName)"
+        try {
+            Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers -ErrorAction Stop
+            Write-Output "Successfully removed AppxPackage: $($pkg.PackageFullName)"
+        }
+        catch {
+            Write-Warning "Failed to remove AppxPackage $($pkg.PackageFullName). Error: $_"
+        }
+    }
+} else {
+    Write-Warning "No Microsoft Teams AppxPackages found."
+}
+
+# Step 2: Find all folders starting with Spotify
+# Stop Teams services
+Stop-Service -Name "TeamsUserService" -Force -ErrorAction SilentlyContinue
+Stop-Service -Name "TeamsMachineInstaller" -Force -ErrorAction SilentlyContinue
+
+# Kill any running Teams processes
+Get-Process -Name "*Teams*" -ErrorAction SilentlyContinue | Stop-Process -Force
+Write-Output "Searching for Microsoft teams folders in WindowsApps..."
+$Folders = Get-ChildItem -Path $BasePath -Directory | Where-Object { $_.Name -like $Prefix }
+
+if ($Folders.Count -eq 0) {
+    Write-Warning "No folders found starting with '$Prefix'."
+    exit
+}
+
+foreach ($Folder in $Folders) {
+    $AppFolder = $Folder.FullName
+    Write-Output "Processing folder: $AppFolder"
+
+    try {
+        # Take ownership of the specific folder
+        takeown /F "$AppFolder" /A /R | Out-Null
+        icacls "$AppFolder" /grant Administrators:F /T | Out-Null
+
+        # Delete the folder
+        if (Test-Path $AppFolder) {
+            Remove-Item -Path $AppFolder -Recurse -Force
+            Write-Output "Folder '$AppFolder' deleted successfully."
+        }
+        else {
+            Write-Warning "Folder '$AppFolder' does not exist."
+        }
+    }
+    catch {
+        Write-Error "Failed to delete folder '$AppFolder'. Error: $_"
+    }
+}
+
+# Step 3: Restore ownership of WindowsApps root back to TrustedInstaller
+Write-Output "Restoring ownership of WindowsApps root..."
+icacls $BasePath /setowner "NT SERVICE\TrustedInstaller" | Out-Null
+
+Write-Output "Process completed."
