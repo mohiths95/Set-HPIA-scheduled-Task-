@@ -1,0 +1,28 @@
+# Disable Proxy Settings for the logged-on user
+$regPathHKCU = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings"
+
+# Ensure path exists
+if (-not (Test-Path $regPathHKCU)) {
+    New-Item -Path $regPathHKCU -Force | Out-Null
+}
+
+# Disable automatic proxy detection
+Set-ItemProperty -Path $regPathHKCU -Name AutoDetect -Value 0 -Type DWord -ErrorAction SilentlyContinue
+
+# Disable manual proxy
+Set-ItemProperty -Path $regPathHKCU -Name ProxyEnable -Value 0 -Type DWord -ErrorAction SilentlyContinue
+
+# Remove auto config script (this clears the "Use setup script" toggle)
+if (Get-ItemProperty -Path $regPathHKCU -Name AutoConfigURL -ErrorAction SilentlyContinue) {
+    Remove-ItemProperty -Path $regPathHKCU -Name AutoConfigURL -ErrorAction SilentlyContinue
+}
+
+# Remove proxy server
+if (Get-ItemProperty -Path $regPathHKCU -Name ProxyServer -ErrorAction SilentlyContinue) {
+    Remove-ItemProperty -Path $regPathHKCU -Name ProxyServer -ErrorAction SilentlyContinue
+}
+
+# Force WinINET reload so Settings UI updates immediately
+rundll32.exe inetcpl.cpl,ClearMyTracksByProcess 255
+
+Write-Output "Proxy disabled for user $env:USERNAME (AutoConfigURL cleared)"
